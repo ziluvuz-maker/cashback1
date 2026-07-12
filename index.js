@@ -5,64 +5,39 @@ const app = express();
 
 app.use(cors());
 
-const BROWSER_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8',
-};
+const SHOPEE_COOKIE = "_hjSessionUser_868286=eyJpZCI6IjhmOWU4NDUzLWNkMzctNTVmZS04ZjUwLTNjZTQ0MmYzNDg5MiIsImNyZWF0ZWQiOjE3MTk1Mzg0ODc2NzgsImV4aXN0aW5nIjp0cnVlfQ==; SPC_F=Z67MsuYNxTUq6IIJxfxaVhIpTTTnGwS4; language=vi; _ga=GA1.1.199623098.1719538486; csrftoken=wTEyllDzipuFKWO8mCiwb7cXShxdcXnJ; SPC_U=257576846; SPC_ST=SEs4TFpibFpBOWdSMWtRcGHUa7F+uOeGwjOTLhMXJ2NZX0WvtMyurQKVOvlVnFlVHkjDmKDRa4H06UnWKv0ErHrsPkolLNsUhcl0dxxbbF6p+QlrzTmbzTkkqq5ir536ffO8/jqs9/XuPf4VJNPSgrJsvsMk3p1ZcFo+euARJSt9duM/65ULL63AliaJtEZ1MvnDiZ1o/EUR1DE9Ss+utQ==.AEiapVOkhhrLxKVwaLohIe7Q3xFg117r4nXo6u0lbPh2; SPC_EC=NEFDVFFiTHBIRGU1VVc1Yh0yyZzgrHNhJMpferC73rQ5Kb7wpDiPHpm8ojWvS8sn8G0KGCw+eXIR5JLgqYI+ieaIDWEynqxeoCdOzZhfRyDPMnfBxs3k6EaaWZ+loYgHc3txE/dm1qXUjxDG/mRC/FMi6kQrBSW7WDGxUe0Mu7dhcZYJCZYsOocrYLndndDKSTkhpBbMLB1a4WJoH7Ut3Q==.ACyxxIilXuma2CikD16+shyQ/aROqWdq4rnWf5rfbQ3Q; _med=affiliates; ds=1993de10198d4b631930280a5b121e8b";
 
-// Bóc meta tag từ HTML
-function parseMeta(html) {
-  const get = (pattern) => {
-    const m = html.match(pattern);
-    return m ? m[1].trim() : null;
-  };
-  return {
-    title: get(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
-        || get(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)
-        || get(/<title>([^<]+)<\/title>/i),
-    image: get(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
-        || get(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i),
-    price: get(/<meta[^>]+property=["']product:price:amount["'][^>]+content=["']([^"']+)["']/i)
-        || get(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']product:price:amount["']/i),
-  };
-}
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  'Accept': 'application/json',
+  'Accept-Language': 'vi-VN,vi;q=0.9',
+  'Referer': 'https://shopee.vn/',
+  'Cookie': SHOPEE_COOKIE
+};
 
 app.get('/resolve', async (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl) return res.status(400).json({ error: 'Thiếu URL' });
 
   let longUrl = targetUrl;
-  let title = 'SẢN PHẨM SHOPEE';
-  let image = 'https://deo.shopeemobile.com/shopee/shopee-pcmall-live-sg/assets/icon_shopee_logo.png';
-  let price = 0;
+  let productTitle = 'SẢN PHẨM SHOPEE';
+  let productImage = 'https://deo.shopeemobile.com/shopee/shopee-pcmall-live-sg/assets/icon_shopee_logo.png';
+  let productPrice = 0;
 
   try {
-    // =============================================
-    // BƯỚC 1: UNSHORTEN (chain redirect tối đa 5 lần)
-    // =============================================
-    let currentUrl = targetUrl;
-    for (let i = 0; i < 5; i++) {
-      if (!currentUrl.includes('s.shopee.vn') && !currentUrl.includes('shp.ee') && !currentUrl.includes('shopee.vn/an_redir')) break;
+    // BƯỚC 1: UNSHORTEN
+    if (targetUrl.includes('s.shopee.vn') || targetUrl.includes('shp.ee')) {
       try {
-        const r = await axios.get(currentUrl, {
-          maxRedirects: 0,
-          validateStatus: s => s >= 200 && s < 400,
-          headers: BROWSER_HEADERS,
-          timeout: 5000,
+        const r = await axios.get(`https://unshorten.me/json/${encodeURIComponent(targetUrl)}`, {
+          timeout: 8000,
+          headers: { 'User-Agent': 'Mozilla/5.0' }
         });
-        if (r.status >= 300 && r.status < 400 && r.headers.location) {
-          currentUrl = r.headers.location;
-        } else break;
-      } catch (e) {
-        if (e.response && e.response.headers && e.response.headers.location) {
-          currentUrl = e.response.headers.location;
-        } else break;
-      }
+        if (r.data && r.data.success && r.data.resolved_url) {
+          longUrl = r.data.resolved_url;
+        }
+      } catch (e) {}
     }
-    longUrl = currentUrl;
 
-    // Bóc origin_link nếu có
     if (longUrl.includes('origin_link=')) {
       try {
         const u = new URL(longUrl);
@@ -71,67 +46,56 @@ app.get('/resolve', async (req, res) => {
       } catch (e) {}
     }
 
-    // =============================================
-    // BƯỚC 2: BÓC SHOPID + ITEMID
-    // =============================================
     const cleanUrl = longUrl.split('?')[0];
+
+    // BƯỚC 2: BÓC SHOPID + ITEMID
     let shopId = '', itemId = '';
 
-    // Dạng: ten-san-pham-i.SHOPID.ITEMID
     const m1 = cleanUrl.match(/-i\.(\d+)\.(\d+)/i);
     if (m1) { shopId = m1[1]; itemId = m1[2]; }
 
-    // Dạng: shopee.vn/username/SHOPID/ITEMID
     if (!shopId) {
-      const m2 = cleanUrl.match(/shopee\.vn\/[^/]+\/(\d{5,})\/(\d{5,})/i);
+      const m2 = cleanUrl.match(/shopee\.vn\/product\/(\d+)\/(\d+)/i);
       if (m2) { shopId = m2[1]; itemId = m2[2]; }
     }
 
-    // Dạng: shopee.vn/product/SHOPID/ITEMID
     if (!shopId) {
-      const m3 = cleanUrl.match(/shopee\.vn\/product\/(\d+)\/(\d+)/i);
+      const m3 = cleanUrl.match(/shopee\.vn\/[^/]+\/(\d{5,})\/(\d{5,})/i);
       if (m3) { shopId = m3[1]; itemId = m3[2]; }
     }
 
-    // Fallback tên từ slug URL
     const slugMatch = cleanUrl.match(/shopee\.vn\/([^/]+)-i\.\d+\.\d+/i);
     if (slugMatch && slugMatch[1]) {
-      try { title = decodeURIComponent(slugMatch[1]).replace(/-/g, ' '); }
-      catch (e) { title = slugMatch[1].replace(/-/g, ' '); }
+      try { productTitle = decodeURIComponent(slugMatch[1]).replace(/-/g, ' '); }
+      catch (e) { productTitle = slugMatch[1].replace(/-/g, ' '); }
     }
 
-    // =============================================
-    // BƯỚC 3: SCRAPE META TAG (thử nhiều URL dạng chuẩn)
-    // =============================================
+    // BƯỚC 3: GỌI API item_info
     if (shopId && itemId) {
-      const urlsToTry = [
-        `https://shopee.vn/product/${shopId}/${itemId}`,
-        `https://shopee.vn/-i.${shopId}.${itemId}`,
-        cleanUrl,
-      ];
+      try {
+        const apiRes = await axios.get(
+          `https://shopee.vn/api/v1/opaanlp/item_info?item_id=${itemId}&shop_id=${shopId}`,
+          { headers: BROWSER_HEADERS, timeout: 8000 }
+        );
 
-      for (const pageUrl of urlsToTry) {
-        try {
-          const pageRes = await axios.get(pageUrl, {
-            headers: BROWSER_HEADERS,
-            timeout: 8000,
-            maxRedirects: 5,
-          });
-          const meta = parseMeta(pageRes.data);
-          if (meta.title && meta.title !== 'Shopee' && !meta.title.includes('Shopee Vietnam')) {
-            title = meta.title;
-            if (meta.image) image = meta.image;
-            if (meta.price) price = parseFloat(meta.price);
-            break;
+        const data = apiRes.data;
+        if (data && data.error === 0 && data.item_card && data.item_card.item_cards && data.item_card.item_cards.length > 0) {
+          const asset = data.item_card.item_cards[0].item_card_displayed_asset;
+          if (asset.name) productTitle = asset.name;
+          if (asset.image) productImage = `https://down-vn.img.susercontent.com/file/${asset.image}`;
+          if (asset.display_price && asset.display_price.price) {
+            productPrice = asset.display_price.price / 100000;
           }
-        } catch (e) {}
+        }
+      } catch (e) {
+        console.warn('item_info lỗi:', e.message);
       }
     }
 
-    res.json({ longUrl, title, image, price, shopId, itemId });
+    res.json({ longUrl, title: productTitle, image: productImage, price: productPrice, shopId, itemId });
 
   } catch (err) {
-    res.json({ longUrl, title, image, price, error: err.message });
+    res.json({ longUrl, title: productTitle, image: productImage, price: 0, error: err.message });
   }
 });
 
